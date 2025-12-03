@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input'
 import CanvasExport from './CanvasExport'
 import TopMenu from '../TopMenu'
+import WebsiteImportDialog from '../chat/WebsiteImportDialog'
 
 type CanvasHeaderProps = {
   canvasName: string
@@ -25,7 +26,12 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({
           onBlur={onNameSave}
         />
       }
-      right={<CanvasExport />}
+      right={
+        <div className="flex items-center gap-2">
+          <WebsiteImportDialog canvasId={canvasId} />
+          <CanvasExport />
+        </div>
+      }
     />
   )
 }

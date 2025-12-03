@@ -4,6 +4,7 @@ Handles canvas operations, locking, and notifications
 """
 
 import asyncio
+import base64
 import os
 import random
 import time
@@ -200,7 +201,6 @@ async def download_image_to_canvas_element(
             if len(parts) != 2:
                 return None
             
-            import base64
             image_bytes = base64.b64decode(parts[1])
             
             # Determine extension from mime type
@@ -257,7 +257,6 @@ async def download_image_to_canvas_element(
             f.write(image_bytes)
         
         # Create data URL for canvas
-        import base64
         data_url = f"data:image/{extension};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
         
         return {

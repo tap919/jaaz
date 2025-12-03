@@ -22,13 +22,11 @@ import { previewWebsite, importWebsite, WebsiteImportResponse } from '@/api/webs
 
 interface WebsiteImportDialogProps {
   canvasId: string
-  sessionId: string
   onImportComplete?: (result: WebsiteImportResponse) => void
 }
 
 export function WebsiteImportDialog({
   canvasId,
-  sessionId,
   onImportComplete,
 }: WebsiteImportDialogProps) {
   const { t } = useTranslation()

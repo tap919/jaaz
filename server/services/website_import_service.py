@@ -19,6 +19,11 @@ import aiohttp
 from PIL import Image
 
 
+# Constants
+DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+MAX_VIEWPORT_HEIGHT = 4000  # Maximum height for captured viewport
+
+
 @dataclass
 class WebsiteElement:
     """Represents a parsed element from a website."""
@@ -134,7 +139,7 @@ class WebsiteImportService:
             try:
                 context = await browser.new_context(
                     viewport={'width': viewport_width, 'height': viewport_height},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+                    user_agent=DEFAULT_USER_AGENT
                 )
                 
                 page = await context.new_page()
@@ -160,7 +165,7 @@ class WebsiteImportService:
                     title=title,
                     elements=elements,
                     viewport_width=viewport_width,
-                    viewport_height=min(scroll_height, 4000),  # Cap at 4000px
+                    viewport_height=min(scroll_height, MAX_VIEWPORT_HEIGHT),
                     screenshot_base64=screenshot_base64
                 )
                 
