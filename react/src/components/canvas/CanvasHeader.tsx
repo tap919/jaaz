@@ -1,6 +1,8 @@
 import { Input } from '@/components/ui/input'
 import CanvasExport from './CanvasExport'
 import TopMenu from '../TopMenu'
+import WebsiteImportDialog from '../chat/WebsiteImportDialog'
+import { WebsiteImportResponse } from '@/api/website'
 
 type CanvasHeaderProps = {
   canvasName: string
@@ -15,6 +17,11 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({
   onNameChange,
   onNameSave,
 }) => {
+  // Handle website import completion - elements are already displayed via API
+  const handleImportComplete = (result: WebsiteImportResponse) => {
+    console.log(`Website import complete: ${result.elements.length} elements imported from ${result.url}`)
+  }
+
   return (
     <TopMenu
       middle={
@@ -25,7 +32,12 @@ const CanvasHeader: React.FC<CanvasHeaderProps> = ({
           onBlur={onNameSave}
         />
       }
-      right={<CanvasExport />}
+      right={
+        <div className="flex items-center gap-2">
+          <WebsiteImportDialog onImportComplete={handleImportComplete} />
+          <CanvasExport />
+        </div>
+      }
     />
   )
 }

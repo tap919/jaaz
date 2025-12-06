@@ -4,12 +4,21 @@ Handles canvas operations, locking, and notifications
 """
 
 import asyncio
+import base64
+import os
 import random
 import time
 import json
 from contextlib import asynccontextmanager
+from io import BytesIO
 from typing import Dict, List, Any, Optional, Union, cast
+
+import aiohttp
 from nanoid import generate
+from PIL import Image
+
+from common import DEFAULT_PORT
+from services.config_service import FILES_DIR
 from services.db_service import db_service
 from services.websocket_service import broadcast_session_update
 from services.websocket_service import send_to_websocket
@@ -162,3 +171,130 @@ async def send_image_error_notification(session_id: str, error_message: str) -> 
         'type': 'error',
         'error': error_message
     })
+
+
+async def download_image_to_canvas_element(
+    image_url: str,
+    x: float = 0,
+    y: float = 0,
+    width: float = 0,
+    height: float = 0
+) -> Optional[Dict[str, Any]]:
+    """
+    Download an image from URL and save it locally for canvas use.
+    
+    Args:
+        image_url: The URL of the image to download
+        x: X position on canvas
+        y: Y position on canvas
+        width: Expected width (will use actual image width if 0)
+        height: Expected height (will use actual image height if 0)
+        
+    Returns:
+        Dict with file_id, url, width, height, and dataURL for canvas use
+    """
+    # Maximum file size: 20MB
+    MAX_IMAGE_SIZE = 20 * 1024 * 1024
+    
+    try:
+        # Handle data URLs
+        if image_url.startswith('data:'):
+            # Already a data URL, extract the base64 content
+            parts = image_url.split(',', 1)
+            if len(parts) != 2:
+                return None
+            
+            image_bytes = base64.b64decode(parts[1])
+            
+            # Check size limit
+            if len(image_bytes) > MAX_IMAGE_SIZE:
+                print(f"Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_SIZE})")
+                return None
+            
+            # Determine extension from mime type
+            mime_part = parts[0]
+            if 'png' in mime_part:
+                extension = 'png'
+            elif 'gif' in mime_part:
+                extension = 'gif'
+            elif 'webp' in mime_part:
+                extension = 'webp'
+            else:
+                extension = 'jpg'
+        else:
+            # Download from URL
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                async with session.get(image_url, headers=headers) as response:
+                    if response.status != 200:
+                        print(f"Failed to download image: HTTP {response.status}")
+                        return None
+                    
+                    # Check content length before downloading
+                    content_length = response.headers.get('Content-Length')
+                    if content_length and int(content_length) > MAX_IMAGE_SIZE:
+                        print(f"Image too large: {content_length} bytes (max {MAX_IMAGE_SIZE})")
+                        return None
+                    
+                    content_type = response.headers.get('Content-Type', '')
+                    image_bytes = await response.read()
+                    
+                    # Check actual size after download
+                    if len(image_bytes) > MAX_IMAGE_SIZE:
+                        print(f"Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_SIZE})")
+                        return None
+                    
+                    # Determine extension from content type
+                    if 'png' in content_type:
+                        extension = 'png'
+                    elif 'gif' in content_type:
+                        extension = 'gif'
+                    elif 'webp' in content_type:
+                        extension = 'webp'
+                    else:
+                        extension = 'jpg'
+        
+        # Verify it's a valid image using PIL
+        try:
+            img = Image.open(BytesIO(image_bytes))
+            img.verify()  # Verify it's a valid image
+            # Re-open after verify (verify closes the file)
+            img = Image.open(BytesIO(image_bytes))
+            actual_width, actual_height = img.size
+        except Exception as e:
+            print(f"Invalid image data from {image_url}: {e}")
+            return None
+        
+        # Use actual dimensions if not specified
+        final_width = width if width > 0 else actual_width
+        final_height = height if height > 0 else actual_height
+        
+        # Generate file ID and save
+        file_id = generate_file_id()
+        filename = f'{file_id}.{extension}'
+        file_path = os.path.join(FILES_DIR, filename)
+        
+        # Save the image
+        os.makedirs(FILES_DIR, exist_ok=True)
+        with open(file_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        # Create data URL for canvas
+        data_url = f"data:image/{extension};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+        
+        return {
+            'file_id': file_id,
+            'filename': filename,
+            'url': f'http://localhost:{DEFAULT_PORT}/api/file/{filename}',
+            'width': final_width,
+            'height': final_height,
+            'dataURL': data_url,
+            'mimeType': f'image/{extension}'
+        }
+        
+    except Exception as e:
+        print(f"Error downloading image from {image_url}: {e}")
+        return None

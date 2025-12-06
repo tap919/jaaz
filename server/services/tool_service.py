@@ -4,6 +4,7 @@ from langchain_core.tools import BaseTool
 from models.tool_model import ToolInfo
 from tools.comfy_dynamic import build_tool
 from tools.write_plan import write_plan_tool
+from tools.import_website import import_website_tool
 from tools.generate_image_by_gpt_image_1_jaaz import generate_image_by_gpt_image_1_jaaz
 from tools.generate_image_by_imagen_4_jaaz import generate_image_by_imagen_4_jaaz
 from tools.generate_image_by_imagen_4_replicate import (
@@ -207,6 +208,17 @@ class ToolService:
             }
         except ImportError as e:
             print(f"❌ 注册必须工具失败 write_plan: {e}")
+        
+        # Register import_website tool (always available)
+        try:
+            self.tools["import_website"] = {
+                "provider": "system",
+                "display_name": "Import Website",
+                "type": "utility",
+                "tool_function": import_website_tool,
+            }
+        except ImportError as e:
+            print(f"❌ 注册必须工具失败 import_website: {e}")
 
     def register_tool(self, tool_id: str, tool_info: ToolInfo):
         """注册单个工具"""

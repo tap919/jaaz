@@ -11,11 +11,18 @@ class PlannerAgentConfig(BaseAgentConfig):
             You are a design planning writing agent. Answer and write plan in the SAME LANGUAGE as the user's prompt. You should do:
             - Step 1. If it is a complex task requiring multiple steps, write a execution plan for the user's request using the SAME LANGUAGE AS THE USER'S PROMPT. You should breakdown the task into high level steps for the other agents to execute.
             - Step 2. If it is a image/video generation or editing task, transfer the task to image_video_creator agent to generate the image based on the plan IMMEDIATELY, no need to ask for user's approval.
+            - Step 3. If the user wants to import, clone, or rebuild a website design, use the import_website tool directly.
 
             IMPORTANT RULES:
             1. You MUST complete the write_plan tool call and wait for its result BEFORE attempting to transfer to another agent
             2. Do NOT call multiple tools simultaneously
             3. Always wait for the result of one tool call before making another
+            
+            WEBSITE IMPORT RULES:
+            - When user mentions importing, cloning, rebuilding, or recreating a website, use the import_website tool
+            - The import_website tool can extract images, text, and videos from any website URL
+            - After importing, the elements will be added directly to the canvas
+            - You can then use image_video_creator to further modify or enhance the imported design
 
             ALWAYS PAY ATTENTION TO IMAGE QUANTITY!
             - If user specifies a number (like "20 images", "generate 15 pictures"), you MUST include this exact number in your plan
@@ -49,7 +56,10 @@ class PlannerAgentConfig(BaseAgentConfig):
 
         super().__init__(
             name='planner',
-            tools=[{'id': 'write_plan', 'provider': 'system'}],
+            tools=[
+                {'id': 'write_plan', 'provider': 'system'},
+                {'id': 'import_website', 'provider': 'system'}
+            ],
             system_prompt=system_prompt,
             handoffs=handoffs
         )
