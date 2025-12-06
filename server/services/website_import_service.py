@@ -4,24 +4,30 @@ Website Import Service - Fetches and parses websites to extract design elements
 for automatic rebuilding on the Jaaz canvas.
 """
 
-import asyncio
 import base64
-import hashlib
-import io
-import os
-import re
+import ipaddress
+import socket
 import traceback
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
-
-import aiohttp
-from PIL import Image
 
 
 # Constants
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 MAX_VIEWPORT_HEIGHT = 4000  # Maximum height for captured viewport
+
+# Private IP ranges to block (SSRF protection)
+BLOCKED_IP_RANGES = [
+    ipaddress.ip_network('127.0.0.0/8'),      # Loopback
+    ipaddress.ip_network('10.0.0.0/8'),       # Private network
+    ipaddress.ip_network('172.16.0.0/12'),    # Private network  
+    ipaddress.ip_network('192.168.0.0/16'),   # Private network
+    ipaddress.ip_network('169.254.0.0/16'),   # Link-local
+    ipaddress.ip_network('::1/128'),          # IPv6 loopback
+    ipaddress.ip_network('fc00::/7'),         # IPv6 private
+    ipaddress.ip_network('fe80::/10'),        # IPv6 link-local
+]
 
 
 @dataclass
@@ -58,19 +64,27 @@ class WebsiteImportService:
     """Service for importing and parsing websites."""
     
     def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
+        pass
     
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create an aiohttp session."""
-        if self.session is None or self.session.closed:
-            timeout = aiohttp.ClientTimeout(total=60)
-            self.session = aiohttp.ClientSession(timeout=timeout)
-        return self.session
-    
-    async def close(self):
-        """Close the aiohttp session."""
-        if self.session and not self.session.closed:
-            await self.session.close()
+    def _is_private_ip(self, hostname: str) -> bool:
+        """Check if hostname resolves to a private/blocked IP address."""
+        try:
+            # Resolve hostname to IP addresses
+            addr_info = socket.getaddrinfo(hostname, None)
+            for family, _, _, _, sockaddr in addr_info:
+                ip_str = sockaddr[0]
+                try:
+                    ip = ipaddress.ip_address(ip_str)
+                    for blocked_range in BLOCKED_IP_RANGES:
+                        if ip in blocked_range:
+                            return True
+                except ValueError:
+                    continue
+            return False
+        except socket.gaierror:
+            # DNS resolution failed - allow the request to proceed
+            # and let Playwright handle the error
+            return False
     
     async def fetch_website(
         self,
@@ -94,6 +108,7 @@ class WebsiteImportService:
             parsed_url = urlparse(url)
             if not parsed_url.scheme:
                 url = f"https://{url}"
+                parsed_url = urlparse(url)
             elif parsed_url.scheme not in ('http', 'https'):
                 return WebsiteParseResult(
                     url=url,
@@ -102,6 +117,28 @@ class WebsiteImportService:
                     viewport_width=viewport_width,
                     viewport_height=viewport_height,
                     error="Invalid URL scheme. Only HTTP and HTTPS are supported."
+                )
+            
+            # SSRF protection: Block requests to private/internal networks
+            hostname = parsed_url.hostname or ''
+            if hostname.lower() in ('localhost', '127.0.0.1', '::1'):
+                return WebsiteParseResult(
+                    url=url,
+                    title="",
+                    elements=[],
+                    viewport_width=viewport_width,
+                    viewport_height=viewport_height,
+                    error="Access to localhost/internal addresses is not allowed."
+                )
+            
+            if self._is_private_ip(hostname):
+                return WebsiteParseResult(
+                    url=url,
+                    title="",
+                    elements=[],
+                    viewport_width=viewport_width,
+                    viewport_height=viewport_height,
+                    error="Access to private/internal network addresses is not allowed."
                 )
             
             # Try using Playwright for full rendering
@@ -243,7 +280,7 @@ class WebsiteImportService:
                     const rect = div.getBoundingClientRect();
                     if (rect.width < 50 || rect.height < 50) return;
                     
-                    const urlMatch = bgImage.match(/url\\(['"']?([^'"')]+)['"']?\\)/);
+                    const urlMatch = bgImage.match(/url\\(['"]?([^'"')]+)['"]?\\)/);
                     if (urlMatch) {
                         result.push({
                             src: urlMatch[1],
@@ -428,10 +465,6 @@ class WebsiteImportService:
             ))
         
         return elements
-    
-    def generate_file_id(self, content: str) -> str:
-        """Generate a unique file ID based on content hash."""
-        return hashlib.md5(content.encode()).hexdigest()[:16]
 
 
 # Singleton instance

@@ -193,6 +193,9 @@ async def download_image_to_canvas_element(
     Returns:
         Dict with file_id, url, width, height, and dataURL for canvas use
     """
+    # Maximum file size: 20MB
+    MAX_IMAGE_SIZE = 20 * 1024 * 1024
+    
     try:
         # Handle data URLs
         if image_url.startswith('data:'):
@@ -202,6 +205,11 @@ async def download_image_to_canvas_element(
                 return None
             
             image_bytes = base64.b64decode(parts[1])
+            
+            # Check size limit
+            if len(image_bytes) > MAX_IMAGE_SIZE:
+                print(f"Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_SIZE})")
+                return None
             
             # Determine extension from mime type
             mime_part = parts[0]
@@ -225,8 +233,19 @@ async def download_image_to_canvas_element(
                         print(f"Failed to download image: HTTP {response.status}")
                         return None
                     
+                    # Check content length before downloading
+                    content_length = response.headers.get('Content-Length')
+                    if content_length and int(content_length) > MAX_IMAGE_SIZE:
+                        print(f"Image too large: {content_length} bytes (max {MAX_IMAGE_SIZE})")
+                        return None
+                    
                     content_type = response.headers.get('Content-Type', '')
                     image_bytes = await response.read()
+                    
+                    # Check actual size after download
+                    if len(image_bytes) > MAX_IMAGE_SIZE:
+                        print(f"Image too large: {len(image_bytes)} bytes (max {MAX_IMAGE_SIZE})")
+                        return None
                     
                     # Determine extension from content type
                     if 'png' in content_type:
@@ -238,9 +257,16 @@ async def download_image_to_canvas_element(
                     else:
                         extension = 'jpg'
         
-        # Open image to get dimensions
-        img = Image.open(BytesIO(image_bytes))
-        actual_width, actual_height = img.size
+        # Verify it's a valid image using PIL
+        try:
+            img = Image.open(BytesIO(image_bytes))
+            img.verify()  # Verify it's a valid image
+            # Re-open after verify (verify closes the file)
+            img = Image.open(BytesIO(image_bytes))
+            actual_width, actual_height = img.size
+        except Exception as e:
+            print(f"Invalid image data from {image_url}: {e}")
+            return None
         
         # Use actual dimensions if not specified
         final_width = width if width > 0 else actual_width

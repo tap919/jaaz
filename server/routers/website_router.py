@@ -3,20 +3,20 @@
 Website Import Router - API endpoints for importing websites into Jaaz canvas.
 """
 
-import asyncio
 import base64
 import os
 import traceback
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
+from PIL import Image
+from io import BytesIO
 from pydantic import BaseModel, Field
 
 from services.config_service import FILES_DIR
 from services.website_import_service import (
     WebsiteElement,
-    WebsiteParseResult,
     website_import_service,
 )
 from tools.utils.image_canvas_utils import (
@@ -32,7 +32,7 @@ class WebsiteImportRequest(BaseModel):
     url: str = Field(..., description="The URL of the website to import")
     viewport_width: int = Field(default=1280, description="Viewport width for rendering")
     viewport_height: int = Field(default=800, description="Viewport height for rendering")
-    include_text: bool = Field(default=True, description="Whether to include text elements")
+    include_text: bool = Field(default=False, description="Whether to include text elements")
     include_images: bool = Field(default=True, description="Whether to include image elements")
     include_videos: bool = Field(default=True, description="Whether to include video elements")
 
@@ -228,11 +228,33 @@ async def _save_screenshot(screenshot_base64: str) -> str:
     """Save a screenshot and return its URL."""
     from common import DEFAULT_PORT
     
+    # Maximum file size: 10MB
+    MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024
+    
+    # Validate and decode base64
+    try:
+        screenshot_bytes = base64.b64decode(screenshot_base64)
+    except Exception as e:
+        raise ValueError(f"Invalid base64 data: {e}")
+    
+    # Check file size
+    if len(screenshot_bytes) > MAX_SCREENSHOT_SIZE:
+        raise ValueError(f"Screenshot too large: {len(screenshot_bytes)} bytes (max {MAX_SCREENSHOT_SIZE})")
+    
+    # Verify it's a valid PNG image
+    try:
+        img = Image.open(BytesIO(screenshot_bytes))
+        img.verify()  # Verify it's a valid image
+    except Exception as e:
+        raise ValueError(f"Invalid image data: {e}")
+    
     file_id = generate_file_id()
     file_path = os.path.join(FILES_DIR, f'{file_id}.png')
     
-    # Decode and save the screenshot
-    screenshot_bytes = base64.b64decode(screenshot_base64)
+    # Ensure directory exists
+    os.makedirs(FILES_DIR, exist_ok=True)
+    
+    # Save the screenshot
     with open(file_path, 'wb') as f:
         f.write(screenshot_bytes)
     

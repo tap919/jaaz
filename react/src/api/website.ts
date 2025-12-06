@@ -63,7 +63,7 @@ export async function importWebsite(
       url: request.url,
       viewport_width: request.viewport_width ?? 1280,
       viewport_height: request.viewport_height ?? 800,
-      include_text: request.include_text ?? true,
+      include_text: request.include_text ?? false,
       include_images: request.include_images ?? true,
       include_videos: request.include_videos ?? true,
     }),

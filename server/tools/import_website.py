@@ -3,7 +3,6 @@
 Website Import Tool - Allows the AI agent to import websites into the canvas.
 """
 
-from typing import Annotated, Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 
 from langchain_core.tools import tool
@@ -14,7 +13,6 @@ from services.websocket_service import send_to_websocket, broadcast_session_upda
 from tools.utils.image_canvas_utils import (
     canvas_lock_manager,
     generate_file_id,
-    generate_new_image_element,
     download_image_to_canvas_element,
 )
 from services.db_service import db_service
@@ -33,6 +31,10 @@ class WebsiteImportInput(BaseModel):
     include_text: bool = Field(
         default=False,
         description="Whether to include text elements from the website"
+    )
+    include_videos: bool = Field(
+        default=True,
+        description="Whether to include video elements from the website"
     )
 
 
@@ -56,6 +58,7 @@ async def import_website_tool(
     url: str,
     include_images: bool,
     include_text: bool,
+    include_videos: bool,
     config: RunnableConfig,
 ) -> str:
     """
@@ -65,6 +68,7 @@ async def import_website_tool(
         url: The URL of the website to import
         include_images: Whether to include images
         include_text: Whether to include text elements
+        include_videos: Whether to include video elements
         config: LangChain runnable config containing session and canvas info
         
     Returns:
@@ -106,7 +110,7 @@ async def import_website_tool(
                 elements_to_import.append(element)
             elif element.type in ('text', 'heading') and include_text:
                 elements_to_import.append(element)
-            elif element.type == 'video':
+            elif element.type == 'video' and include_videos:
                 elements_to_import.append(element)
         
         if not elements_to_import:

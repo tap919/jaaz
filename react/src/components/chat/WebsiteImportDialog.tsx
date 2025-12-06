@@ -2,7 +2,6 @@
 // Dialog component for importing websites into the canvas
 
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Globe, Loader2, Image as ImageIcon, Type, Video, X } from 'lucide-react'
 
@@ -21,15 +20,12 @@ import { Label } from '@/components/ui/label'
 import { previewWebsite, importWebsite, WebsiteImportResponse } from '@/api/website'
 
 interface WebsiteImportDialogProps {
-  canvasId: string
-  onImportComplete?: (result: WebsiteImportResponse) => void
+  onImportComplete: (result: WebsiteImportResponse) => void
 }
 
 export function WebsiteImportDialog({
-  canvasId,
   onImportComplete,
 }: WebsiteImportDialogProps) {
-  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -92,7 +88,7 @@ export function WebsiteImportDialog({
         toast.success(`Website imported successfully!`, {
           description: `Imported ${result.elements.length} elements from "${result.title}"`,
         })
-        onImportComplete?.(result)
+        onImportComplete(result)
         setOpen(false)
         resetState()
       } else {
